@@ -38,14 +38,29 @@ pipeline {
 
     post {
         always {
-            node('master') { // Ensure the cleanup runs on the master node
+            node('master') { 
                 script {
-                    // Clean up Docker containers and images
-                    sh '''
-                    docker stop mysql-db || true
-                    docker rm mysql-db || true
-                    docker system prune -af
-                    '''
+                    // Parallel cleanup tasks to save time
+                    parallel (
+                        stopContainer: {
+                            sh '''
+                            echo "Stopping MySQL container..."
+                            docker stop mysql-db || true
+                            '''
+                        },
+                        removeContainer: {
+                            sh '''
+                            echo "Removing MySQL container..."
+                            docker rm mysql-db || true
+                            '''
+                        },
+                        pruneSystem: {
+                            sh '''
+                            echo "Pruning Docker system..."
+                            docker system prune -af --volumes || true
+                            '''
+                        }
+                    )
                 }
             }
         }
