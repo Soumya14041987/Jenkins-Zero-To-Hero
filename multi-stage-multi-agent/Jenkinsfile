@@ -1,67 +1,44 @@
 pipeline {
     agent none
-    environment {
-        // Retrieve credentials from Jenkins' credentials store
-        DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials-id') // Jenkins credentials ID
-        DB_CREDENTIALS = credentials('db-credentials-id') // Jenkins credentials ID for DB credentials
-        BACKEND_IMAGE = "${env.DOCKERHUB_CREDENTIALS_USR}/backend:latest"
-        FRONTEND_IMAGE = "${env.DOCKERHUB_CREDENTIALS_USR}/frontend:latest"
-    }
+
     stages {
-        stage('Front-end') {
-            agent {
-                docker { image 'node:16-alpine' }
-            }
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials-id', usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                    script {
-                        sh '''
-                        echo ${DOCKERHUB_PASSWORD} | docker login -u ${DOCKERHUB_USERNAME} --password-stdin
-                        docker build -t ${FRONTEND_IMAGE} ./frontend
-                        docker push ${FRONTEND_IMAGE}
-                        '''
-                    }
-                }
-                sh 'node --version'
-            }
-        }
         stage('Back-end') {
             agent {
                 docker { image 'maven:3.8.1-adoptopenjdk-11' }
             }
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials-id', usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                    script {
-                        sh '''
-                        echo ${DOCKERHUB_PASSWORD} | docker login -u ${DOCKERHUB_USERNAME} --password-stdin
-                        docker build -t ${BACKEND_IMAGE} ./backend
-                        docker push ${BACKEND_IMAGE}
-                        '''
-                    }
-                }
                 sh 'mvn --version'
             }
         }
-        stage('Set Up MySQL') {
+        stage('Front-end') {
             agent {
-                docker { image 'mysql:8' }
+                docker { image 'node:16-alpine' }
             }
             steps {
-                withCredentials([usernamePassword(credentialsId: 'db-credentials-id', usernameVariable: 'DB_USER', passwordVariable: 'DB_PASS')]) {
-                    script {
-                        // Run MySQL container with credentials
-                        sh '''
-                        docker run --name mysql-db -e MYSQL_ROOT_PASSWORD=${DB_PASS} -e MYSQL_DATABASE=mydb -d mysql:8
-                        '''
-                    }
-                }
+                sh 'node --version'
+            }
+        }
+        stage('Database') {
+            agent {
+                docker { image 'mysql:8.0' }
+            }
+            environment {
+                MYSQL_ROOT_PASSWORD = 'root_password'
+                MYSQL_DATABASE = 'my_database'
+                MYSQL_USER = 'user'
+                MYSQL_PASSWORD = 'password'
+            }
+            steps {
+                sh '''
+                docker run --name mysql-db -e MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD} -e MYSQL_DATABASE=${MYSQL_DATABASE} -e MYSQL_USER=${MYSQL_USER} -e MYSQL_PASSWORD=${MYSQL_PASSWORD} -d mysql:8.0
+                '''
             }
         }
     }
+
     post {
         always {
-            // Specify the agent label where the cleanup steps should run
-            'node('master')' { // Replace 'your-agent-label' with the label of your Jenkins agent
+            node('master') { // Ensure the cleanup runs on the master node
                 script {
                     // Clean up Docker containers and images
                     sh '''
