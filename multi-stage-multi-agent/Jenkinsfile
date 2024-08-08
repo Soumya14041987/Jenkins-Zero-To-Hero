@@ -1,21 +1,66 @@
 pipeline {
   agent none
+  environment {
+    DOCKERHUB_CREDENTIALS = credentials('dockerhub-credentials-id') // Replace with your Docker Hub credentials ID
+    DOCKERHUB_USERNAME = 'your-dockerhub-username' // Replace with your Docker Hub username
+    BACKEND_IMAGE = "${DOCKERHUB_USERNAME}/backend:latest"
+    FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/frontend:latest"
+  }
   stages {
-    stage('Back-end') {
+    stage('Build Back-end') {
       agent {
         docker { image 'maven:3.8.1-adoptopenjdk-11' }
       }
       steps {
-        sh 'mvn --version'
+        sh 'mvn clean package'
+        script {
+          // Build Docker image for the backend
+          sh """
+            docker build -t ${BACKEND_IMAGE} -f Dockerfile.backend .
+            echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+            docker push ${BACKEND_IMAGE}
+          """
+        }
       }
     }
-    stage('Front-end') {
+    stage('Build Front-end') {
       agent {
         docker { image 'node:16-alpine' }
       }
       steps {
-        sh 'node --version'
+        sh 'npm install'
+        sh 'npm run build'
+        script {
+          // Build Docker image for the frontend
+          sh """
+            docker build -t ${FRONTEND_IMAGE} -f Dockerfile.frontend .
+            echo ${DOCKERHUB_CREDENTIALS_PSW} | docker login -u ${DOCKERHUB_CREDENTIALS_USR} --password-stdin
+            docker push ${FRONTEND_IMAGE}
+          """
+        }
+      }
+    }
+    stage('Database') {
+      agent any
+      steps {
+        script {
+          // This is just an example, customize it according to your database setup
+          sh """
+            docker pull mysql:5.7
+            docker run --name my-database -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=mydb -d mysql:5.7
+          """
+        }
+      }
+    }
+  }
+  post {
+    always {
+      script {
+        // Cleanup Docker containers and images
+        sh 'docker container prune -f'
+        sh 'docker image prune -f'
       }
     }
   }
 }
+
