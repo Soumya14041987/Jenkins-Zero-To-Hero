@@ -60,13 +60,16 @@ pipeline {
     }
     post {
         always {
-            script {
-                // Clean up Docker containers and images
-                sh '''
-                docker stop mysql-db || true
-                docker rm mysql-db || true
-                docker system prune -af
-                '''
+            // Add a node context for the cleanup steps
+            node {
+                script {
+                    // Clean up Docker containers and images
+                    sh '''
+                    docker stop mysql-db || true
+                    docker rm mysql-db || true
+                    docker system prune -af
+                    '''
+                }
             }
         }
     }
